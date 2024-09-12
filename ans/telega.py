@@ -1,40 +1,41 @@
 import logging
 from telegram import Update, ReplyKeyboardMarkup
-from requests import get, post
+from requests import post
 import re
-from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
+import datetime
+from telegram.ext import Application, CommandHandler, ConversationHandler, MessageHandler, filters
+
+# set global variables
 data = []
 chat_id = ''
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.ERROR
-)
 
+# configure logging module to output debug information to console
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-reply_keyboard = [['Да', 'Нет']]
+
+# reply_keyboard = [['Да', 'Нет']]
 product_list = [['VOCORD MicroCyclops', 'VOCORD Cyclops', 'VOCORD Cyclops Portable'],
                 ['VOCORD SSCross', 'VOCORD SMCross', 'VOCORD NCCross'],
                 ['VOCORD VERelay 6', 'VOCORD TLCross'],
                 ['Комплекс освещения VOCORD'],
                 ['VOCORD Tahion', 'VOCORD ParkingControl']]
-markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
-pmarkup = ReplyKeyboardMarkup(product_list, one_time_keyboard=True)
+# markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+product_markup = ReplyKeyboardMarkup(product_list, one_time_keyboard=True)
 
 
 def check_email(email):
+    # Для проверки корректности пароля
     pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-    if re.match(pattern, email):
-        return True
-    else:
-        return False
+    return re.match(pattern, email)
 
 
 async def start(update, context):
     await update.message.reply_text(
-        "Здравствуйте. Я - бот для техподдержки Вокорда!\n"
-        "Вы можете прислать нам прислать описание вашей проблемы и мы в скором времени свяжемся с вами!\n"
-        "Если вы передумали или ваша проблема была устранена нажмите /stop."
-        "Для связи с вами нам нужно знать как к вам обращаться!\n"
-        "Как к вам обращаться? (Напишите в формате ФИО с пробелами)")
+        "Здравствуйте! Я - бот техподдержки Вокорда! "
+        "Вы можете прислать нам описание Вашей проблемы и мы в скором времени свяжемся с Вами! "
+        "Если Вы передумали или Ваша проблема была устранена нажмите /stop. "
+        "Для связи с Вами нам нужно знать как к Вам обращаться! "
+        "Пожалуйста, напишите Ваше ФИО с пробелами.")
     return 1
 
 
@@ -44,8 +45,8 @@ async def first_response(update, context):
     data.append(update.message.text)
     logger.info(data[-1])
     await update.message.reply_text(
-        f"Для связи мы используем почту.\n"
-        f"(Пришлите адрес почты для ответа Вам. В почте обязан присутствовать символ '@')")
+        f"Для связи, мы используем почту.\n"
+        f"(Пришлите Ваш адрес почты, в котором должен присутствовать символ '@')")
     return 2
 
 
@@ -59,7 +60,7 @@ async def second_response(update, context):
         return 2
     await update.message.reply_text("Пришлите название нашего продукта или выберите из списка,"
                                     " проблему о котором вы хотите задать!",
-                                    reply_markup=pmarkup)
+                                    reply_markup=product_markup)
     return 3
 
 
