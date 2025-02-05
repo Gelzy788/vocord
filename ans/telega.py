@@ -1,8 +1,10 @@
 import logging
 from telegram import Update, ReplyKeyboardMarkup
 from requests import get, post
+#import telebot
+#bot = telebot.TeleBot('6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc')
 import re
-from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler
 data = []
 chat_id = ''
 logging.basicConfig(
@@ -41,6 +43,7 @@ async def start(update, context):
 async def first_response(update, context):
     global data, chat_id
     chat_id = str(update.message.chat.id)
+    print(chat_id)
     data.append(update.message.text)
     logger.info(data[-1])
     await update.message.reply_text(
@@ -54,7 +57,7 @@ async def second_response(update, context):
     data.append(update.message.text)
     logger.info(data[-1])
     if not check_email(email=data[-1]):
-        await update.message.reply_text("Некорректная почта!")
+        await update.message.reply_text("Некорректная почта! Введите почту еще раз!")
         del data[-1]
         return 2
     await update.message.reply_text("Пришлите название нашего продукта или выберите из списка,"
@@ -111,6 +114,11 @@ async def stop(update, context):
     return ConversationHandler.END
 
 
+#def sender(message):
+#    chat_id = 2118178098  # Сюда помещаем id пользователя кому будет отправлено сообщение
+#    bot.send_message(chat_id, message)
+
+
 def main() -> None:
     application = Application.builder().token("6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc").build()
     conv_handler = ConversationHandler(
@@ -124,6 +132,8 @@ def main() -> None:
         },
         fallbacks=[CommandHandler(['stop'], stop)]
     )
+    #sender_handler = ConversationHandler(
+    #entry_points=[CallbackQueryHandler(sender)])
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("send_request", start))
     application.add_handler(CommandHandler("stop", stop))
@@ -132,3 +142,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    #sender("lol")
