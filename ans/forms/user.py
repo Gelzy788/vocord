@@ -15,7 +15,7 @@ class RegisterForm(FlaskForm):
 
 
 class SendForm(FlaskForm):
-    text = TextAreaField('Текст сообщения', validators=[DataRequired()])
+    text = TextAreaField('Сообщение', validators=[DataRequired()])
     submit = SubmitField('Отправить')
 
 

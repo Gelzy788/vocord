@@ -1,0 +1,53 @@
+body {
+    background-image: url('/static/img/back.jpg');
+    background-repeat: repeat;
+    background-size: 100%;
+}
+
+.chat-container {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.message {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 5px;
+    max-width: 70%;
+}
+
+.user-message {
+    background-color: #e3f2fd;
+    margin-left: auto;
+}
+
+.support-message {
+    background-color: #f5f5f5;
+    margin-right: auto;
+}
+
+.message-content {
+    margin-bottom: 5px;
+}
+
+.message-info {
+    font-size: 0.8em;
+    color: #666;
+}
+
+.reply-form {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 20px;
+}
+
+.ticket-info {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}

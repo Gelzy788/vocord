@@ -1,1 +1,25 @@
-{"data": [["1", "\u041a\u0430\u043a \u0436\u0435 \u044f \u0443\u0441\u0442\u0430\u043b \u043e\u0442 \u0442\u0435\u0431\u044f!", 0]]}
+{
+  "messages": [
+    {
+      "message_id": 1239,
+      "text": "Р—РґСЂР°РІСЃС‚РІСѓР№С‚Рµ!",
+      "sender_type": "client",
+      "sender_name": "Handlebars",
+      "timestamp": 1739363885
+    },
+    {
+      "message_id": 1241,
+      "text": "Здравствуйте, как ваши дела?",
+      "sender_type": "support",
+      "sender_name": "Перунов Тимофей",
+      "timestamp": 1739363920
+    },
+    {
+      "message_id": 1242,
+      "text": "нормально. Хотел спросить, вы чешете анус на работе?",
+      "sender_type": "client",
+      "sender_name": "Handlebars",
+      "timestamp": 1739363944
+    }
+  ]
+}

@@ -1,36 +1,34 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>{{title}}</title>
-    <link rel="icon" type="image/png" href="/static/img/Vocord_ico.png">
-    <link rel="stylesheet"
-                    href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css"
-                    integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1"
-                    crossorigin="anonymous">
-    <style>
-        #draggable { width: 90%; border-radius: 50px; border-color: #000000; padding: 0.5em; background-color: #474747; }
-    </style>
-    <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
-    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
-    <script>
-        $( function() {
-        $( "#draggable" ).draggable();
-        } );
-    </script>
-    <style>
-    body {
-    background-image: url(/static/img/back.jpg);
-    background-repeat: repeat;
-    background-size: 100%;
-    }
-	</style>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='img/Vocord_ico.png') }}">
+    <title>{{ title }}</title>
 </head>
+
 <body>
-<img src="/static/img/Vocord.png" />
-<main role="main" class="container">
-    {% block content %}{% endblock %}
-</main>
+    <header>
+        <nav class="navbar navbar-light bg-light">
+            <a class="navbar-brand" href="/my_desk">
+                <img src="{{ url_for('static', filename='img/Vocord.png') }}" width="200"
+                    class="d-inline-block align-top" alt="">
+            </a>
+            {% if name %}
+            <a class="navbar-brand" href="/logout">
+                <img src="{{ url_for('static', filename='img/user_ico_w_trans.png') }}" width="30" height="30"
+                    class="d-inline-block align-top" alt="">
+                {{ name }}
+            </a>
+            {% endif %}
+        </nav>
+    </header>
+    <main role="main" class="container">
+        {% block content %}{% endblock %}
+    </main>
 </body>
+
 </html>

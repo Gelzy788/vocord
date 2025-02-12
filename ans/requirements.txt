@@ -7,3 +7,4 @@ SQLAlchemy==2.0.28
 SQLAlchemy_serializer==1.4.12
 Werkzeug==3.0.2
 WTForms==3.1.2
+email_validator==2.1.1

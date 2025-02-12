@@ -46,3 +46,29 @@ def add_ticket_api():
     db_sess.add(ticket)
     db_sess.commit()
     return jsonify({'id': ticket.id})
+
+
+@blueprint.route('/api/ticket_by_chat/<chat_id>')
+def get_ticket_by_chat(chat_id):
+    db_sess = db_session.create_session()
+    ticket = db_sess.query(Ticket).filter(Ticket.chat_id == chat_id).first()
+    if not ticket:
+        return jsonify({'error': 'Not found'})
+    return jsonify({'ticket': ticket.to_dict()})
+
+
+@blueprint.route('/api/update_last_id', methods=['POST'])
+def update_last_id():
+    if not request.json:
+        return jsonify({'error': 'Empty request'})
+
+    db_sess = db_session.create_session()
+    ticket = db_sess.query(Ticket).get(request.json['ticket_id'])
+
+    if not ticket:
+        return jsonify({'error': 'Not found'})
+
+    ticket.last_id = request.json['last_id']
+    db_sess.commit()
+
+    return jsonify({'success': 'OK'})
