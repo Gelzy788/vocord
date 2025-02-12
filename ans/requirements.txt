@@ -1,7 +1,7 @@
 Flask==3.0.3
 Flask_Login==0.6.3
 flask_wtf==1.2.1
-python-telegram-bot==21.1.1
+python-telegram-bot>=20.0
 Requests==2.31.0
 SQLAlchemy==2.0.28
 SQLAlchemy_serializer==1.4.12
