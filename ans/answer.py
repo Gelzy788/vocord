@@ -107,12 +107,12 @@ def send_message(ticket_number):
                 if not os.path.exists(filename):
                     data = {"messages": [message_data]}
                 else:
-                    with open(filename, "r") as json_file:
+                    with open(filename, "r", encoding='utf-8') as json_file:
                         data = json.load(json_file)
                         data["messages"].append(message_data)
 
-                with open(filename, 'w') as f:
-                    json.dump(data, f, indent=2)
+                with open(filename, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
 
                 return redirect(f'/ticket/{ticket_number}')
 
@@ -140,7 +140,7 @@ def beloved_ticket(ticket_number):
         messages = []
 
         if os.path.exists(filename):
-            with open(filename) as json_file:
+            with open(filename, encoding='utf-8') as json_file:
                 data = json.load(json_file)
                 messages = data.get("messages", [])
                 print(f"Загруженные сообщения из файла: {messages}")
@@ -187,8 +187,9 @@ def beloved_ticket(ticket_number):
                 messages.sort(key=lambda x: x["timestamp"])
 
                 print(f"Сохраняем обновленные сообщения: {messages}")
-                with open(filename, 'w') as f:
-                    json.dump({"messages": messages}, f, indent=2)
+                with open(filename, 'w', encoding='utf-8') as f:
+                    json.dump({"messages": messages}, f,
+                              indent=2, ensure_ascii=False)
 
         return render_template('new_ticket.html',
                                title=ticket.problem_name,

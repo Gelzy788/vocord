@@ -20,6 +20,20 @@
       "sender_type": "client",
       "sender_name": "Handlebars",
       "timestamp": 1739363944
+    },
+    {
+      "message_id": 1244,
+      "text": "Что за вопросы?",
+      "sender_type": "support",
+      "sender_name": "Перунов Тимофей",
+      "timestamp": 1739364344
+    },
+    {
+      "message_id": 1245,
+      "text": "ну скажите пожалуйста🙏",
+      "sender_type": "client",
+      "sender_name": "Handlebars",
+      "timestamp": 1739364401
     }
   ]
 }
