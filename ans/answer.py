@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, abort
+from flask import Flask, render_template, redirect, abort, flash
 from requests import get, post
 from data import db_session, vocord_tickets_api
 from forms.user import RegisterForm, LoginForm, SendForm
@@ -53,14 +53,39 @@ def logout():
 @app.route('/my_desk')
 def desk():
     global name, admin
-    news = []
-    in_works = []
+    news = []  # Новые тикеты (status=0)
+    completed = []  # Выполненные тикеты (status=1)
+
+    # Получаем новые тикеты
     for el in get('http://127.0.0.1:8080/api/all_tickets/0').json()['tickets']:
-        news.append([el['id'], el['problem_name'], el['name'], el['product_name'], el['created_at'],
-                    "document.location='http://127.0.0.1:8080/ticket/" + str(el['id']) + "'"])
+        news.append([
+            el['id'],
+            el['problem_name'],
+            el['name'],
+            el['product_name'],
+            el['created_at'],
+            f"document.location='http://127.0.0.1:8080/ticket/{el['id']}'"
+        ])
+
+    # Получаем выполненные тикеты
+    for el in get('http://127.0.0.1:8080/api/all_tickets/1').json()['tickets']:
+        completed.append([
+            el['id'],
+            el['problem_name'],
+            el['name'],
+            el['product_name'],
+            el['created_at'],
+            f"document.location='http://127.0.0.1:8080/ticket/{el['id']}'"
+        ])
+
     if name is None:
         return redirect('/login')
-    return render_template('desk.html', title='Vocord technical support desk', news=news, in_works=in_works)
+
+    return render_template('desk.html',
+                           title='Vocord technical support desk',
+                           news=news,
+                           completed=completed,  # Передаем выполненные тикеты в шаблон
+                           name=name)
 
 
 @app.errorhandler(404)
@@ -72,13 +97,18 @@ def not_found_error(error):
 def send_message(ticket_number):
     form = SendForm()
     if form.validate_on_submit():
-        text = form.text.data
         with session_scope() as db_sess:
             ticket = db_sess.query(Ticket).filter(
                 Ticket.id == ticket_number).first()
             if not ticket:
                 abort(404)
 
+            # Проверяем, не закрыт ли тикет
+            if ticket.is_finished:
+                flash('Этот тикет уже закрыт')
+                return redirect(f'/ticket/{ticket_number}')
+
+            text = form.text.data
             chat_id = ticket.chat_id
             token = "6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc"
 
@@ -195,7 +225,8 @@ def beloved_ticket(ticket_number):
                                title=ticket.problem_name,
                                ticket=ticket.to_dict(),
                                name=name,
-                               messages=messages)
+                               messages=messages,
+                               is_finished=ticket.is_finished)
 
 
 @app.route('/add_new_user', methods=['GET', 'POST'])
@@ -262,4 +293,4 @@ def add_header(response):
 
 if __name__ == '__main__':
     app.register_blueprint(vocord_tickets_api.blueprint)
-    app.run(port=8080, host='127.0.0.1')
+    app.run(port=8080, host='0.0.0.0', debug=True)

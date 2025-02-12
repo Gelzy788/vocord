@@ -1,55 +1,76 @@
 {% extends "base.html" %}
 
 {% block content %}
-<style>
-table {
-  background-color: #0e2b0e;
-  width: 100%;
-  border-radius: 23px;
-  border-collapse: separate;
-}
+<h1>Техподдержка Vocord</h1>
 
-td:first-child, th:first-child {
-     border-left: none;
-}
+<ul class="nav nav-tabs" id="myTab" role="tablist">
+    <li class="nav-item">
+        <a class="nav-link active" id="new-tab" data-toggle="tab" href="#new" role="tab">Новые</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" id="completed-tab" data-toggle="tab" href="#completed" role="tab">Выполненные</a>
+    </li>
+</ul>
 
-tr {
-    border-radius: 50px;
-    background-color: #7a7a7a;
-}
+<div class="tab-content" id="myTabContent">
+    <!-- Новые тикеты -->
+    <div class="tab-pane fade show active" id="new" role="tabpanel">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Проблема</th>
+                        <th>Клиент</th>
+                        <th>Продукт</th>
+                        <th>Дата создания</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in news %}
+                    <tr onclick="{{ item[5] }}" style="cursor: pointer;">
+                        <td>{{ item[0] }}</td>
+                        <td>{{ item[1] }}</td>
+                        <td>{{ item[2] }}</td>
+                        <td>{{ item[3] }}</td>
+                        <td>{{ item[4] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-td {
-    width: 20%;
-    text-align: center;
-    vertical-align: middle;
-    align:center;
-    cursor: pointer;
-}
+    <!-- Выполненные тикеты -->
+    <div class="tab-pane fade" id="completed" role="tabpanel">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Проблема</th>
+                        <th>Клиент</th>
+                        <th>Продукт</th>
+                        <th>Дата создания</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in completed %}
+                    <tr onclick="{{ item[5] }}" style="cursor: pointer;">
+                        <td>{{ item[0] }}</td>
+                        <td>{{ item[1] }}</td>
+                        <td>{{ item[2] }}</td>
+                        <td>{{ item[3] }}</td>
+                        <td>{{ item[4] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
-th:first-child {
-border-top-left-radius: 50px;
-}
-th:last-child {
-border-top-right-radius: 50px;
-border-right: none;
-}
-
-tr:last-child td:first-child {
-border-radius: 0 0 0 50px;
-}
-
-tr:last-child td:last-child {
-border-radius: 0 0 50px 0;
-}
-
-tr td:last-child {
-border-right: none;
-}
-</style>
-    <table>
-        <tr style="background-color: #559a20;"><th>ID</th><th>Проблема</th><th>Заказчик</th><th>Продукт</th><th>Время создания</th></tr>
-        {% for ticket in news %}
-            <tr><td onclick={{ticket[5]}} >{{ ticket[0] }}</td><td onclick={{ ticket[5] }} >{{ ticket[1] }}</td><td onclick={{ ticket[5] }} >{{ ticket[2] }}</td><td onclick="document.location='http://127.0.0.1:8080/login'">{{ ticket[3] }}</td><td onclick="document.location='http://127.0.0.1:8080/login'">{{ ticket[4] }}</td></tr>
-        {% endfor %}
-    </table>
+<!-- Добавляем необходимые скрипты для работы вкладок -->
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js"></script>
 {% endblock %}

@@ -7,7 +7,11 @@
   <p><strong>Клиент:</strong> {{ ticket.name }}</p>
   <p><strong>Продукт:</strong> {{ ticket.product_name }}</p>
   <p><strong>Описание проблемы:</strong> {{ ticket.problem_full }}</p>
+  <p><strong>Статус:</strong> {% if ticket.is_finished %}Закрыт{% else %}Активен{% endif %}</p>
   <button onclick="window.location.reload()" class="btn btn-secondary">Обновить сообщения</button>
+  {% if not ticket.is_finished %}
+  <button onclick="closeTicket({{ ticket.id }})" class="btn btn-danger">Закрыть тикет</button>
+  {% endif %}
 </div>
 
 <div class="chat-container">
@@ -24,6 +28,7 @@
   {% endfor %}
 </div>
 
+{% if not ticket.is_finished %}
 <div class="reply-form">
   <h3>Ответить на обращение</h3>
   <form action="{{ url_for('send_message', ticket_number=ticket.id) }}" method="post">
@@ -33,4 +38,17 @@
     <button type="submit" class="btn btn-primary">Отправить</button>
   </form>
 </div>
+{% endif %}
+
+<script>
+  function closeTicket(ticketId) {
+    if (confirm('Вы уверены, что хотите закрыть тикет?')) {
+      fetch(`/api/close_ticket/${ticketId}`, {
+        method: 'POST'
+      }).then(() => {
+        window.location.href = '/my_desk';
+      });
+    }
+  }
+</script>
 {% endblock %}

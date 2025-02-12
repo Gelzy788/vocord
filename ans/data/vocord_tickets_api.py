@@ -72,3 +72,18 @@ def update_last_id():
     db_sess.commit()
 
     return jsonify({'success': 'OK'})
+
+
+@blueprint.route('/api/close_ticket/<int:ticket_id>', methods=['POST'])
+def close_ticket(ticket_id):
+    db_sess = db_session.create_session()
+    ticket = db_sess.query(Ticket).get(ticket_id)
+
+    if not ticket:
+        return jsonify({'error': 'Not found'})
+
+    ticket.status = 1  # 1 означает "выполнено"
+    ticket.is_finished = True
+    db_sess.commit()
+
+    return jsonify({'success': 'OK'})

@@ -116,20 +116,24 @@ async def handle_chat_message(update, context):
     chat_id = str(update.message.chat.id)
     message_id = update.message.message_id
 
-    print(
-        f"Получено сообщение в чате: ID={message_id}, chat_id={chat_id}, text={message_text}")
-
     # Получаем тикет по chat_id
     ticket_response = get(
         f'http://127.0.0.1:8080/api/ticket_by_chat/{chat_id}').json()
-    print(f"Ответ API ticket_by_chat: {ticket_response}")
 
     if not ticket_response.get('ticket'):
         print(f"Тикет не найден для chat_id={chat_id}")
         return ConversationHandler.END
 
     ticket = ticket_response['ticket']
-    print(f"Найден тикет: {ticket}")
+
+    # Проверяем, не закрыт ли тикет
+    if ticket.get('is_finished'):
+        await update.message.reply_text(
+            "Этот тикет уже закрыт. Создайте новый тикет с помощью команды /send_request")
+        return ConversationHandler.END
+
+    print(
+        f"Получено сообщение в чате: ID={message_id}, chat_id={chat_id}, text={message_text}")
 
     # Сохраняем сообщение в JSON
     messages_dir = 'messages'
@@ -180,9 +184,23 @@ async def handle_chat_message(update, context):
 
 async def stop(update, context):
     global data, chat_id
+    current_chat_id = str(update.message.chat.id)
+
+    # Получаем тикет по chat_id
+    ticket_response = get(
+        f'http://127.0.0.1:8080/api/ticket_by_chat/{current_chat_id}').json()
+
+    if ticket_response.get('ticket'):
+        ticket = ticket_response['ticket']
+        # Закрываем тикет
+        post(f'http://127.0.0.1:8080/api/close_ticket/{ticket["id"]}')
+        await update.message.reply_text(
+            "Тикет закрыт. Спасибо за обращение! Если у вас появятся новые вопросы, создайте новый тикет командой /send_request")
+    else:
+        await update.message.reply_text("Всего доброго!")
+
     chat_id = ''
     data = []
-    await update.message.reply_text("Всего доброго!")
     return ConversationHandler.END
 
 
