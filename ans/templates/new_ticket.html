@@ -9,9 +9,6 @@
   <p><strong>Описание проблемы:</strong> {{ ticket.problem_full }}</p>
   <p><strong>Статус:</strong> {% if ticket.is_finished %}Закрыт{% else %}Активен{% endif %}</p>
   <button onclick="window.location.reload()" class="btn btn-secondary">Обновить сообщения</button>
-  {% if not ticket.is_finished %}
-  <button onclick="closeTicket({{ ticket.id }})" class="btn btn-danger">Закрыть тикет</button>
-  {% endif %}
 </div>
 
 <div class="chat-container">
@@ -39,16 +36,4 @@
   </form>
 </div>
 {% endif %}
-
-<script>
-  function closeTicket(ticketId) {
-    if (confirm('Вы уверены, что хотите закрыть тикет?')) {
-      fetch(`/api/close_ticket/${ticketId}`, {
-        method: 'POST'
-      }).then(() => {
-        window.location.href = '/my_desk';
-      });
-    }
-  }
-</script>
 {% endblock %}

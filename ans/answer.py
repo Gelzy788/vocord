@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, abort, flash
+from flask import Flask, render_template, redirect, abort, flash, jsonify
 from requests import get, post
 from data import db_session, vocord_tickets_api
 from forms.user import RegisterForm, LoginForm, SendForm
@@ -161,10 +161,6 @@ def beloved_ticket(ticket_number):
         if not ticket:
             abort(404)
 
-        print(f"Загружаем тикет: {ticket.to_dict()}")  # Отладка
-
-        token = "6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc"
-
         # Загружаем сообщения из JSON файла
         filename = f'messages/{ticket_number}data.json'
         messages = []
@@ -173,53 +169,44 @@ def beloved_ticket(ticket_number):
             with open(filename, encoding='utf-8') as json_file:
                 data = json.load(json_file)
                 messages = data.get("messages", [])
-                print(f"Загруженные сообщения из файла: {messages}")
 
-        # Получаем новые сообщения из Telegram
-        updates = get(
-            f'http://api.telegram.org/bot{token}/getUpdates?offset=0').json()
+        # Получаем новые сообщения из Telegram только если тикет не закрыт
+        if not ticket.is_finished:
+            token = "6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc"
+            updates = get(
+                f'http://api.telegram.org/bot{token}/getUpdates?offset=0').json()
 
-        print(f"Ответ Telegram API: {updates}")  # Отладка
+            if updates.get('ok'):
+                messages_updated = False
+                for update in updates['result']:
+                    if ('message' in update and
+                            str(update['message']['chat']['id']) == ticket.chat_id):
 
-        if updates.get('ok'):
-            messages_updated = False
-            for update in updates['result']:
-                if ('message' in update and
-                        str(update['message']['chat']['id']) == ticket.chat_id):
+                        message_id = update['message']['message_id']
+                        message_text = update['message'].get('text', '')
 
-                    message_id = update['message']['message_id']
-                    message_text = update['message'].get('text', '')
+                        # Пропускаем команды
+                        if message_text.startswith('/'):
+                            continue
 
-                    print(
-                        f"Обрабатываем сообщение: ID={message_id}, text={message_text}")
+                        # Проверяем, не добавлено ли уже это сообщение
+                        if not any(msg["message_id"] == message_id for msg in messages):
+                            message_data = {
+                                "message_id": message_id,
+                                "text": message_text,
+                                "sender_type": "client",
+                                "sender_name": ticket.name,
+                                "timestamp": update['message']['date']
+                            }
+                            messages.append(message_data)
+                            messages_updated = True
 
-                    # Пропускаем команды
-                    if message_text.startswith('/'):
-                        continue
-
-                    # Проверяем, не добавлено ли уже это сообщение
-                    if not any(msg["message_id"] == message_id for msg in messages):
-                        print("Добавляем новое сообщение в список")
-
-                        message_data = {
-                            "message_id": message_id,
-                            "text": message_text,
-                            "sender_type": "client",
-                            "sender_name": ticket.name,  # Имя клиента из тикета
-                            "timestamp": update['message']['date']
-                        }
-
-                        messages.append(message_data)
-                        messages_updated = True
-
-            if messages_updated:
-                # Сортируем сообщения по времени
-                messages.sort(key=lambda x: x["timestamp"])
-
-                print(f"Сохраняем обновленные сообщения: {messages}")
-                with open(filename, 'w', encoding='utf-8') as f:
-                    json.dump({"messages": messages}, f,
-                              indent=2, ensure_ascii=False)
+                if messages_updated:
+                    # Сортируем сообщения по времени
+                    messages.sort(key=lambda x: x["timestamp"])
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        json.dump({"messages": messages}, f,
+                                  indent=2, ensure_ascii=False)
 
         return render_template('new_ticket.html',
                                title=ticket.problem_name,
@@ -289,6 +276,57 @@ def add_header(response):
     if 'Refresh' in response.headers:
         del response.headers['Refresh']
     return response
+
+
+@app.route('/api/close_ticket/<int:ticket_id>', methods=['POST'])
+def close_ticket(ticket_id):
+    db_sess = db_session.create_session()
+    ticket = db_sess.query(Ticket).get(ticket_id)
+
+    if not ticket:
+        return jsonify({'error': 'Not found'})
+
+    # Отправляем сообщение пользователю в Telegram
+    chat_id = ticket.chat_id
+    token = "6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc"
+    message = "Тикет был закрыт сотрудником техподдержки. Если у вас появятся новые вопросы, создайте новый тикет командой /send_request"
+
+    post(
+        f'http://api.telegram.org/bot{token}/sendmessage?chat_id={chat_id}&text={message}')
+
+    ticket.status = 1  # 1 означает "выполнено"
+    ticket.is_finished = True
+    db_sess.commit()
+
+    return jsonify({'success': 'OK'})
+
+
+@app.route('/api/delete_ticket/<int:ticket_id>', methods=['POST'])
+def delete_ticket(ticket_id):
+    db_sess = db_session.create_session()
+    ticket = db_sess.query(Ticket).get(ticket_id)
+
+    if not ticket:
+        return jsonify({'error': 'Not found'})
+
+    # Отправляем сообщение пользователю в Telegram
+    chat_id = ticket.chat_id
+    token = "6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc"
+    message = "Тикет закрыт. Спасибо за обращение! Если у вас появятся новые вопросы, создайте новый тикет командой /send_request"
+
+    post(
+        f'http://api.telegram.org/bot{token}/sendmessage?chat_id={chat_id}&text={message}')
+
+    # Удаляем файл с сообщениями
+    messages_file = f'messages/{ticket_id}data.json'
+    if os.path.exists(messages_file):
+        os.remove(messages_file)
+
+    # Удаляем тикет из БД
+    db_sess.delete(ticket)
+    db_sess.commit()
+
+    return jsonify({'success': 'OK'})
 
 
 if __name__ == '__main__':
