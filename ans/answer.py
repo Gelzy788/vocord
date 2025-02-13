@@ -136,7 +136,7 @@ def beloved_ticket(ticket_number):
         current_user = db_sess.query(User).filter(
             User.surname + ' ' + User.name == name).first()
 
-        # Проверяем права доступа к тикету
+        # Проверяем права доступа к тикету (админ может смотреть любые тикеты)
         if not admin and ticket.assigned_to != current_user.id:
             flash('У вас нет прав на просмотр этого тикета')
             return redirect('/my_desk')
@@ -558,15 +558,15 @@ def view_staff_member(user_id):
             Ticket.is_finished == False
         ).count()
 
-        closed_tickets = db_sess.query(Ticket).filter(
+        # Получаем все закрытые тикеты
+        closed_tickets_query = db_sess.query(Ticket).filter(
             Ticket.assigned_to == user.id,
             Ticket.is_finished == True
-        ).count()
+        )
 
-        # Получаем все тикеты сотрудника
-        tickets = db_sess.query(Ticket).filter(
-            Ticket.assigned_to == user.id
-        ).order_by(Ticket.created_at.desc()).all()
+        closed_tickets = closed_tickets_query.count()
+        closed_tickets_list = closed_tickets_query.order_by(
+            Ticket.created_at.desc()).all()
 
         return render_template('staff_member.html',
                                title=f'Сотрудник: {user.surname} {user.name}',
@@ -575,7 +575,7 @@ def view_staff_member(user_id):
                                user=user,
                                active_tickets=active_tickets,
                                closed_tickets=closed_tickets,
-                               tickets=tickets)
+                               closed_tickets_list=closed_tickets_list)
     except Exception as e:
         print(f"Ошибка при просмотре сотрудника: {e}")
         flash('Произошла ошибка при загрузке данных сотрудника')

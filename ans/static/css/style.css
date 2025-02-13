@@ -10,32 +10,55 @@ body {
     padding: 20px;
     border: 1px solid #ddd;
     border-radius: 5px;
+    background-color: #f8f9fa;
 }
 
 .message {
     margin: 10px 0;
     padding: 10px;
-    border-radius: 5px;
+    border-radius: 10px;
     max-width: 70%;
+    position: relative;
+    clear: both;
 }
 
 .user-message {
     background-color: #e3f2fd;
-    margin-left: auto;
+    float: left;
+    margin-right: auto;
 }
 
 .support-message {
-    background-color: #f5f5f5;
-    margin-right: auto;
+    background-color: #00a650;
+    /* Зеленый цвет компании */
+    color: white;
+    float: right;
+    margin-left: auto;
 }
 
 .message-content {
     margin-bottom: 5px;
+    word-wrap: break-word;
 }
 
 .message-info {
     font-size: 0.8em;
+    margin-top: 5px;
+}
+
+.user-message .message-info {
     color: #666;
+}
+
+.support-message .message-info {
+    color: #e0e0e0;
+}
+
+/* Очистка float после сообщений */
+.chat-container::after {
+    content: "";
+    display: table;
+    clear: both;
 }
 
 .reply-form {
