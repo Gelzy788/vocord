@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card mb-4">
+        <div class="card-header">
+            <h1>Профиль сотрудника</h1>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <table class="table">
+                        <tr>
+                            <th>ФИО:</th>
+                            <td>{{ user.surname }} {{ user.name }} {{ user.last_name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Email:</th>
+                            <td>{{ user.email }}</td>
+                        </tr>
+                        <tr>
+                            <th>Логин:</th>
+                            <td>{{ user.login }}</td>
+                        </tr>
+                        <tr>
+                            <th>Роль:</th>
+                            <td>{% if user.admin %}Администратор{% else %}Сотрудник поддержки{% endif %}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <h2>Статистика</h2>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card text-white bg-primary mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">Активные тикеты</h5>
+                                <p class="card-text display-4">{{ active_tickets }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-white bg-success mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">Закрытые тикеты</h5>
+                                <p class="card-text display-4">{{ closed_tickets }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <h2>Тикеты сотрудника</h2>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Проблема</th>
+                            <th>Клиент</th>
+                            <th>Продукт</th>
+                            <th>Дата</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ticket in tickets %}
+                        <tr onclick="window.location='/ticket/{{ ticket.id }}'" style="cursor: pointer;">
+                            <td>{{ ticket.id }}</td>
+                            <td>{{ ticket.problem_name }}</td>
+                            <td>{{ ticket.name }}</td>
+                            <td>{{ ticket.product_name }}</td>
+                            <td>{{ ticket.created_at }}</td>
+                            <td>{% if ticket.is_finished %}Закрыт{% else %}Активен{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="jumbotron">
+        <h1 class="display-4">Техподдержка Vocord</h1>
+        <p class="lead">Система обработки обращений клиентов</p>
+        <hr class="my-4">
+        {% if name %}
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Мои тикеты</h5>
+                        <p class="card-text">Просмотр и обработка назначенных тикетов</p>
+                        <a href="/my_desk" class="btn btn-primary">Перейти к тикетам</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Мой профиль</h5>
+                        <p class="card-text">Информация о сотруднике и статистика</p>
+                        <a href="/profile" class="btn btn-primary">Перейти в профиль</a>
+                    </div>
+                </div>
+            </div>
+            {% if is_admin %}
+            <div class="col-md-4 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Управление сотрудниками</h5>
+                        <p class="card-text">Добавление новых сотрудников</p>
+                        <a href="/add_new_user" class="btn btn-primary">Добавить сотрудника</a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Статистика</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="text-center">
+                                    <h3>{{ active_tickets }}</h3>
+                                    <p>Активных тикетов</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center">
+                                    <h3>{{ closed_tickets }}</h3>
+                                    <p>Закрытых тикетов</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <p>Для доступа к системе необходимо авторизоваться</p>
+        <a class="btn btn-primary btn-lg" href="/login" role="button">Войти в систему</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

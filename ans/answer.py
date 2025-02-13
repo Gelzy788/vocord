@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, abort, flash, jsonify
+from flask import Flask, render_template, redirect, abort, flash, jsonify, request
 from requests import get, post
 from data import db_session, vocord_tickets_api
 from forms.user import RegisterForm, LoginForm, SendForm
@@ -53,39 +53,64 @@ def logout():
 @app.route('/my_desk')
 def desk():
     global name, admin
-    news = []  # Новые тикеты (status=0)
-    completed = []  # Выполненные тикеты (status=1)
-
-    # Получаем новые тикеты
-    for el in get('http://127.0.0.1:8080/api/all_tickets/0').json()['tickets']:
-        news.append([
-            el['id'],
-            el['problem_name'],
-            el['name'],
-            el['product_name'],
-            el['created_at'],
-            f"document.location='http://127.0.0.1:8080/ticket/{el['id']}'"
-        ])
-
-    # Получаем выполненные тикеты
-    for el in get('http://127.0.0.1:8080/api/all_tickets/1').json()['tickets']:
-        completed.append([
-            el['id'],
-            el['problem_name'],
-            el['name'],
-            el['product_name'],
-            el['created_at'],
-            f"document.location='http://127.0.0.1:8080/ticket/{el['id']}'"
-        ])
-
     if name is None:
         return redirect('/login')
 
-    return render_template('desk.html',
-                           title='Vocord technical support desk',
-                           news=news,
-                           completed=completed,  # Передаем выполненные тикеты в шаблон
-                           name=name)
+    try:
+        db_sess = db_session.create_session()
+        current_user = db_sess.query(User).filter(
+            User.surname + ' ' + User.name == name).first()
+
+        if not current_user:
+            return redirect('/login')
+
+        if admin:
+            # Для админа показываем нераспределенные тикеты
+            unassigned = get(
+                'http://127.0.0.1:8080/api/get_unassigned_tickets').json()['tickets']
+            unassigned_list = [[
+                t['id'],
+                t['problem_name'],
+                t['name'],
+                t['product_name'],
+                t['created_at'],
+            ] for t in unassigned]
+
+            # Получаем список всех сотрудников поддержки
+            support_users = db_sess.query(
+                User).filter(User.admin == False).all()
+        else:
+            unassigned_list = []
+            support_users = []
+
+        # Получаем тикеты, назначенные текущему пользователю
+        assigned = get(
+            f'http://127.0.0.1:8080/api/get_user_tickets/{current_user.id}').json()['tickets']
+        assigned_list = [[
+            t['id'],
+            t['problem_name'],
+            t['name'],
+            t['product_name'],
+            t['created_at'],
+            f"document.location='http://127.0.0.1:8080/ticket/{t['id']}'"
+        ] for t in assigned]
+
+        return render_template('desk.html',
+                               title='Vocord technical support desk',
+                               unassigned=unassigned_list,
+                               news=assigned_list,
+                               support_users=support_users,
+                               name=name,
+                               is_admin=admin)
+    except Exception as e:
+        print(f"Ошибка при загрузке страницы desk: {e}")
+        return render_template('desk.html',
+                               title='Vocord technical support desk',
+                               unassigned=[],
+                               news=[],
+                               support_users=[],
+                               name=name,
+                               is_admin=admin)
 
 
 @app.errorhandler(404)
@@ -161,6 +186,16 @@ def beloved_ticket(ticket_number):
         if not ticket:
             abort(404)
 
+        # Получаем текущего пользователя
+        current_user = db_sess.query(User).filter(
+            User.surname + ' ' + User.name == name).first()
+
+        # Получаем список всех сотрудников поддержки для выпадающего списка
+        support_staff = None
+        if admin:
+            support_staff = db_sess.query(
+                User).filter(User.admin == False).all()
+
         # Загружаем сообщения из JSON файла
         filename = f'messages/{ticket_number}data.json'
         messages = []
@@ -208,12 +243,15 @@ def beloved_ticket(ticket_number):
                         json.dump({"messages": messages}, f,
                                   indent=2, ensure_ascii=False)
 
-        return render_template('new_ticket.html',
-                               title=ticket.problem_name,
-                               ticket=ticket.to_dict(),
+        return render_template('ticket.html',
+                               title=f'Тикет №{ticket_number}',
+                               ticket=ticket,
                                name=name,
                                messages=messages,
-                               is_finished=ticket.is_finished)
+                               is_finished=ticket.is_finished,
+                               support_staff=support_staff,  # Список сотрудников
+                               is_admin=admin,  # Флаг админа
+                               current_user=current_user)  # Текущий пользователь
 
 
 @app.route('/add_new_user', methods=['GET', 'POST'])
@@ -278,27 +316,33 @@ def add_header(response):
     return response
 
 
-@app.route('/api/close_ticket/<int:ticket_id>', methods=['POST'])
-def close_ticket(ticket_id):
-    db_sess = db_session.create_session()
-    ticket = db_sess.query(Ticket).get(ticket_id)
+@app.route('/api/close_ticket', methods=['POST'])
+def close_ticket_api():
+    """Закрыть тикет через API"""
+    if not request.json or 'ticket_id' not in request.json:
+        return jsonify({'error': 'Missing ticket_id'}), 400
 
-    if not ticket:
-        return jsonify({'error': 'Not found'})
+    try:
+        db_sess = db_session.create_session()
+        ticket = db_sess.query(Ticket).get(request.json['ticket_id'])
 
-    # Отправляем сообщение пользователю в Telegram
-    chat_id = ticket.chat_id
-    token = "6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc"
-    message = "Тикет был закрыт сотрудником техподдержки. Если у вас появятся новые вопросы, создайте новый тикет командой /send_request"
+        if not ticket:
+            return jsonify({'error': 'Ticket not found'}), 404
 
-    post(
-        f'http://api.telegram.org/bot{token}/sendmessage?chat_id={chat_id}&text={message}')
+        if ticket.is_finished:
+            return jsonify({'error': 'Ticket already closed'}), 400
 
-    ticket.status = 1  # 1 означает "выполнено"
-    ticket.is_finished = True
-    db_sess.commit()
+        # Закрываем тикет
+        ticket.is_finished = True
+        db_sess.commit()
 
-    return jsonify({'success': 'OK'})
+        return jsonify({
+            'success': True,
+            'chat_id': ticket.chat_id  # Возвращаем chat_id для очистки данных в боте
+        })
+    except Exception as e:
+        print(f"Ошибка при закрытии тикета: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/delete_ticket/<int:ticket_id>', methods=['POST'])
@@ -329,6 +373,336 @@ def delete_ticket(ticket_id):
     return jsonify({'success': 'OK'})
 
 
+@app.route('/api/assign_ticket', methods=['POST'])
+def assign_ticket():
+    """Назначить тикет сотруднику"""
+    if not request.json:
+        return jsonify({'error': 'Empty request'})
+
+    db_sess = db_session.create_session()
+    ticket = db_sess.query(Ticket).get(request.json['ticket_id'])
+    user = db_sess.query(User).get(request.json['user_id'])
+
+    if not ticket or not user:
+        return jsonify({'error': 'Not found'})
+
+    ticket.assigned_to = user.id
+    ticket.worker = f"{user.surname} {user.name}"
+    db_sess.commit()
+
+    return jsonify({'success': 'OK'})
+
+
+@app.route('/api/get_unassigned_tickets')
+def get_unassigned_tickets():
+    """Получить все нераспределенные тикеты"""
+    try:
+        db_sess = db_session.create_session()
+        tickets = db_sess.query(Ticket).filter(
+            Ticket.assigned_to == None,
+            Ticket.is_finished == False  # Добавляем фильтр по незакрытым тикетам
+        ).all()
+        return jsonify({
+            'tickets': [item.to_dict(
+                only=('id', 'problem_name', 'name',
+                      'product_name', 'created_at')
+            ) for item in tickets]
+        })
+    except Exception as e:
+        print(f"Ошибка при получении нераспределенных тикетов: {e}")
+        return jsonify({'tickets': []})
+
+
+@app.route('/api/get_user_tickets/<int:user_id>')
+def get_user_tickets(user_id):
+    """Получить все тикеты, назначенные пользователю"""
+    try:
+        db_sess = db_session.create_session()
+        tickets = db_sess.query(Ticket).filter(
+            Ticket.assigned_to == user_id,
+            Ticket.is_finished == False  # Добавляем фильтр по незакрытым тикетам
+        ).all()
+        return jsonify({
+            'tickets': [item.to_dict(
+                only=('id', 'problem_name', 'name',
+                      'product_name', 'created_at')
+            ) for item in tickets]
+        })
+    except Exception as e:
+        print(f"Ошибка при получении тикетов пользователя: {e}")
+        return jsonify({'tickets': []})
+
+
+@app.route('/api/ticket_by_chat/<chat_id>')
+def get_ticket_by_chat(chat_id):
+    print(f"Получен запрос для chat_id: {chat_id}")
+    try:
+        db_sess = db_session.create_session()
+        ticket = db_sess.query(Ticket).filter(
+            Ticket.chat_id == chat_id).first()
+        print(f"Найден тикет: {ticket}")
+        return jsonify({'ticket': ticket.to_dict() if ticket else None})
+    except Exception as e:
+        print(f"Ошибка при поиске тикета: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/test')
+def test_api():
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/assign_worker/<int:ticket_id>', methods=['POST'])
+def assign_worker(ticket_id):
+    """Назначить сотрудника на тикет"""
+    if not request.form.get('worker_id'):
+        flash('Выберите сотрудника')
+        return redirect('/my_desk')
+
+    try:
+        db_sess = db_session.create_session()
+        ticket = db_sess.query(Ticket).get(ticket_id)
+        worker = db_sess.query(User).get(request.form.get('worker_id'))
+
+        if not ticket or not worker:
+            flash('Тикет или сотрудник не найден')
+            return redirect('/my_desk')
+
+        ticket.assigned_to = worker.id
+        ticket.worker = f"{worker.surname} {worker.name}"
+        db_sess.commit()
+
+        flash(
+            f'Тикет №{ticket_id} назначен сотруднику {worker.surname} {worker.name}')
+    except Exception as e:
+        print(f"Ошибка при назначении сотрудника: {e}")
+        flash('Произошла ошибка при назначении сотрудника')
+
+    return redirect('/my_desk')
+
+
+@app.route('/profile')
+def profile():
+    """Страница профиля текущего пользователя"""
+    global name, admin
+    if name is None:
+        return redirect('/login')
+
+    try:
+        db_sess = db_session.create_session()
+        current_user = db_sess.query(User).filter(
+            User.surname + ' ' + User.name == name).first()
+
+        if not current_user:
+            return redirect('/login')
+
+        # Получаем статистику по тикетам
+        active_tickets = db_sess.query(Ticket).filter(
+            Ticket.assigned_to == current_user.id,
+            Ticket.is_finished == False
+        ).count()
+
+        closed_tickets = db_sess.query(Ticket).filter(
+            Ticket.assigned_to == current_user.id,
+            Ticket.is_finished == True
+        ).count()
+
+        return render_template('profile.html',
+                               title='Профиль',
+                               name=name,
+                               user=current_user,
+                               active_tickets=active_tickets,
+                               closed_tickets=closed_tickets)
+
+    except Exception as e:
+        print(f"Ошибка при загрузке профиля: {e}")
+        flash('Произошла ошибка при загрузке профиля')
+        return redirect('/my_desk')
+
+
+@app.route('/')
+def index():
+    """Главная страница"""
+    global name, admin
+
+    if name is None:
+        return render_template('index.html',
+                               title='Главная',
+                               name=None)
+
+    try:
+        db_sess = db_session.create_session()
+        current_user = db_sess.query(User).filter(
+            User.surname + ' ' + User.name == name).first()
+
+        if not current_user:
+            return redirect('/login')
+
+        # Получаем статистику по тикетам
+        active_tickets = db_sess.query(Ticket).filter(
+            Ticket.assigned_to == current_user.id,
+            Ticket.is_finished == False
+        ).count()
+
+        closed_tickets = db_sess.query(Ticket).filter(
+            Ticket.assigned_to == current_user.id,
+            Ticket.is_finished == True
+        ).count()
+
+        return render_template('index.html',
+                               title='Главная',
+                               name=name,
+                               is_admin=admin,
+                               active_tickets=active_tickets,
+                               closed_tickets=closed_tickets)
+
+    except Exception as e:
+        print(f"Ошибка при загрузке главной страницы: {e}")
+        flash('Произошла ошибка при загрузке страницы')
+        return render_template('index.html',
+                               title='Главная',
+                               name=name,
+                               is_admin=admin)
+
+
+@app.route('/staff')
+def staff_list():
+    """Страница со списком сотрудников"""
+    global name, admin
+    if not admin:
+        return redirect('/')
+
+    try:
+        db_sess = db_session.create_session()
+        users = db_sess.query(User).all()
+
+        # Добавляем количество активных тикетов для каждого пользователя
+        for user in users:
+            user.active_tickets = db_sess.query(Ticket).filter(
+                Ticket.assigned_to == user.id,
+                Ticket.is_finished == False
+            ).count()
+
+        return render_template('staff_list.html',
+                               title='Сотрудники',
+                               name=name,
+                               is_admin=admin,
+                               users=users)
+    except Exception as e:
+        print(f"Ошибка при загрузке списка сотрудников: {e}")
+        flash('Произошла ошибка при загрузке списка сотрудников')
+        return redirect('/')
+
+
+@app.route('/staff/<int:user_id>')
+def view_staff_member(user_id):
+    """Страница просмотра сотрудника"""
+    global name, admin
+    if not admin:
+        return redirect('/')
+
+    try:
+        db_sess = db_session.create_session()
+        user = db_sess.query(User).get(user_id)
+
+        if not user:
+            flash('Сотрудник не найден')
+            return redirect('/staff')
+
+        # Получаем статистику
+        active_tickets = db_sess.query(Ticket).filter(
+            Ticket.assigned_to == user.id,
+            Ticket.is_finished == False
+        ).count()
+
+        closed_tickets = db_sess.query(Ticket).filter(
+            Ticket.assigned_to == user.id,
+            Ticket.is_finished == True
+        ).count()
+
+        # Получаем все тикеты сотрудника
+        tickets = db_sess.query(Ticket).filter(
+            Ticket.assigned_to == user.id
+        ).order_by(Ticket.created_at.desc()).all()
+
+        return render_template('staff_member.html',
+                               title=f'Сотрудник: {user.surname} {user.name}',
+                               name=name,
+                               is_admin=admin,
+                               user=user,
+                               active_tickets=active_tickets,
+                               closed_tickets=closed_tickets,
+                               tickets=tickets)
+    except Exception as e:
+        print(f"Ошибка при просмотре сотрудника: {e}")
+        flash('Произошла ошибка при загрузке данных сотрудника')
+        return redirect('/staff')
+
+
+@app.route('/close_ticket/<int:ticket_id>', methods=['POST'])
+def close_ticket(ticket_id):
+    """Закрыть тикет через веб-интерфейс"""
+    global name, admin
+    if name is None:
+        return redirect('/login')
+
+    try:
+        db_sess = db_session.create_session()
+        ticket = db_sess.query(Ticket).get(ticket_id)
+        current_user = db_sess.query(User).filter(
+            User.surname + ' ' + User.name == name).first()
+
+        if not ticket:
+            flash('Тикет не найден')
+            return redirect('/my_desk')
+
+        # Проверяем права на закрытие тикета
+        if not admin and ticket.assigned_to != current_user.id:
+            flash('У вас нет прав на закрытие этого тикета')
+            return redirect(f'/ticket/{ticket_id}')
+
+        if ticket.is_finished:
+            flash('Тикет уже закрыт')
+            return redirect(f'/ticket/{ticket_id}')
+
+        # Закрываем тикет
+        ticket.is_finished = True
+        db_sess.commit()
+
+        # Отправляем уведомление в Telegram
+        chat_id = ticket.chat_id
+        token = "6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc"
+        message = "Тикет был закрыт сотрудником техподдержки. Если у вас появятся новые вопросы, создайте новый тикет командой /send_request"
+
+        post(
+            f'http://api.telegram.org/bot{token}/sendmessage?chat_id={chat_id}&text={message}')
+
+        flash('Тикет успешно закрыт')
+        return redirect('/my_desk')
+
+    except Exception as e:
+        print(f"Ошибка при закрытии тикета: {e}")
+        flash('Произошла ошибка при закрытии тикета')
+        return redirect(f'/ticket/{ticket_id}')
+
+
+@app.route('/api/all_tickets_by_chat/<chat_id>')
+def get_all_tickets_by_chat(chat_id):
+    """Получить все тикеты по chat_id"""
+    try:
+        db_sess = db_session.create_session()
+        tickets = db_sess.query(Ticket).filter(
+            Ticket.chat_id == chat_id
+        ).order_by(Ticket.created_at.desc()).all()
+
+        return jsonify({
+            'tickets': [ticket.to_dict() for ticket in tickets]
+        })
+    except Exception as e:
+        print(f"Ошибка при получении тикетов: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.register_blueprint(vocord_tickets_api.blueprint)
-    app.run(port=8080, host='0.0.0.0', debug=True)
+    app.run(port=8080, host='127.0.0.1', debug=True)

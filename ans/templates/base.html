@@ -12,20 +12,46 @@
 
 <body>
     <header>
-        <nav class="navbar navbar-light bg-light">
-            <a class="navbar-brand" href="/my_desk">
-                <img src="{{ url_for('static', filename='img/Vocord.png') }}" width="200"
-                    class="d-inline-block align-top" alt="">
+        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <a class="navbar-brand" href="/">
+                <img src="{{ url_for('static', filename='img/Vocord.png') }}" width="120" alt="Vocord">
             </a>
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
             {% if name %}
-            <a class="navbar-brand" href="/logout">
-                <img src="{{ url_for('static', filename='img/user_ico_w_trans.png') }}" width="30" height="30"
-                    class="d-inline-block align-top" alt="">
-                {{ name }}
-            </a>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav mr-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/my_desk">Мои тикеты</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/profile">Профиль</a>
+                    </li>
+                    {% if is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/staff">Управление сотрудниками</a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <div class="navbar-nav">
+                    <a class="nav-link" href="/logout">
+                        <img src="{{ url_for('static', filename='img/user_ico_w_trans.png') }}" width="30" height="30"
+                            class="d-inline-block align-middle mr-2" alt="">
+                        {{ name }} (Выйти)
+                    </a>
+                </div>
+            </div>
             {% endif %}
         </nav>
     </header>
+
+    <!-- Добавляем скрипты Bootstrap -->
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+
     <main role="main" class="container">
         {% block content %}{% endblock %}
     </main>

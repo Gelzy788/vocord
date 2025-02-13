@@ -10,6 +10,7 @@ import json
 import time
 import signal
 import sys
+import psutil
 
 data = []
 chat_id = ''
@@ -23,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 # Создаем файл для хранения PID
 PID_FILE = "bot.pid"
+
+# Определяем базовый URL для API
+API_BASE_URL = 'http://127.0.0.1:8080'  # Оставляем localhost
 
 
 def cleanup():
@@ -42,20 +46,38 @@ def signal_handler(signum, frame):
 def check_running():
     """Проверяет, не запущен ли уже бот"""
     if os.path.exists(PID_FILE):
-        with open(PID_FILE, 'r') as f:
-            old_pid = int(f.read())
         try:
-            # Проверяем, существует ли процесс
-            os.kill(old_pid, 0)
-            print(f"Бот уже запущен (PID: {old_pid})")
-            sys.exit(1)
-        except OSError:
-            # Процесс не существует
-            pass
+            with open(PID_FILE, 'r') as f:
+                old_pid = int(f.read())
+
+            # Для Windows используем специальную проверку
+            if psutil.pid_exists(old_pid):
+                print(f"Бот уже запущен (PID: {old_pid})")
+                sys.exit(1)
+            else:
+                # Процесс не существует, удаляем старый PID файл
+                os.remove(PID_FILE)
+        except (ValueError, OSError):
+            # Если файл поврежден или не читается, удаляем его
+            os.remove(PID_FILE)
 
     # Записываем текущий PID
     with open(PID_FILE, 'w') as f:
         f.write(str(os.getpid()))
+
+
+def check_server():
+    """Проверяет доступность сервера"""
+    try:
+        response = get(f'{API_BASE_URL}/api/test')
+        if response.status_code == 200:
+            print("Сервер успешно запущен и доступен")
+            return True
+        print(f"Сервер недоступен, код ответа: {response.status_code}")
+        return False
+    except Exception as e:
+        print(f"Ошибка при проверке сервера: {e}")
+        return False
 
 
 reply_keyboard = [['Да', 'Нет']]
@@ -78,11 +100,41 @@ def check_email(email):
 
 async def start(update, context):
     """Начало создания нового тикета"""
+    current_chat_id = str(update.message.chat.id)
+
+    try:
+        # Проверяем, есть ли уже активный тикет
+        response = get(
+            f'{API_BASE_URL}/api/ticket_by_chat/{current_chat_id}')
+
+        if response.status_code != 200:
+            print(f"Ошибка сервера: {response.status_code}")
+            # Добавляем вывод текста ответа
+            print(f"Ответ сервера: {response.text}")
+            await update.message.reply_text(
+                "Извините, сервер временно недоступен. Попробуйте позже.")
+            return ConversationHandler.END
+
+        ticket_response = response.json()
+
+        if ticket_response.get('ticket'):
+            ticket = ticket_response['ticket']
+            if not ticket.get('is_finished'):  # Если тикет активен
+                await update.message.reply_text(
+                    "У вас уже есть активный тикет. Пожалуйста, дождитесь ответа специалиста или закройте текущий тикет командой /stop")
+                return ConversationHandler.END
+
+    except Exception as e:
+        print(f"Ошибка при проверке тикета: {e}")
+        await update.message.reply_text(
+            "Извините, произошла ошибка. Убедитесь, что сервер запущен и попробуйте снова.")
+        return ConversationHandler.END
+
     # Очищаем предыдущие данные и сбрасываем состояние
     context.user_data.clear()
     global data, chat_id
     data = []
-    chat_id = str(update.message.chat.id)  # Устанавливаем новый chat_id
+    chat_id = current_chat_id  # Устанавливаем новый chat_id
 
     await update.message.reply_text(
         "Здравствуйте. Я - бот для техподдержки Вокорда!\n"
@@ -100,17 +152,16 @@ async def first_response(update, context):
     data.append(update.message.text)
     logger.info(data[-1])
 
-    # Очищаем предыдущие данные о тикетах
-    context.user_data.clear()
-
-    # Получаем все тикеты пользователя
+    # Получаем тикет по chat_id
     ticket_response = get(
-        f'http://127.0.0.1:8080/api/ticket_by_chat/{chat_id}').json()
+        f'{API_BASE_URL}/api/ticket_by_chat/{chat_id}').json()
 
-    # Если есть тикет, закрываем его
-    if ticket_response.get('ticket'):
-        post(
-            f'http://127.0.0.1:8080/api/close_ticket/{ticket_response["ticket"]["id"]}')
+    # Проверяем, есть ли активный тикет
+    if ticket_response.get('ticket') and not ticket_response['ticket'].get('is_finished'):
+        await update.message.reply_text(
+            "У вас уже есть активный тикет. Пожалуйста, дождитесь ответа специалиста или закройте текущий тикет командой /stop")
+        context.user_data.clear()
+        return ConversationHandler.END
 
     await update.message.reply_text(
         f"Для связи мы используем почту.\n"
@@ -155,12 +206,15 @@ async def fifth_response(update, context):
 
     current_chat_id = str(update.message.chat.id)  # Получаем текущий chat_id
 
-    # Закрываем все предыдущие тикеты пользователя
+    # Проверяем, есть ли активный тикет
     ticket_response = get(
-        f'http://127.0.0.1:8080/api/ticket_by_chat/{current_chat_id}').json()
-    if ticket_response.get('ticket'):
-        post(
-            f'http://127.0.0.1:8080/api/delete_ticket/{ticket_response["ticket"]["id"]}')
+        f'{API_BASE_URL}/api/ticket_by_chat/{current_chat_id}').json()
+
+    if ticket_response.get('ticket') and not ticket_response['ticket'].get('is_finished'):
+        await update.message.reply_text(
+            "У вас уже есть активный тикет. Пожалуйста, дождитесь ответа специалиста или закройте текущий тикет командой /stop")
+        context.user_data.clear()
+        return ConversationHandler.END
 
     await update.message.reply_text(
         "Спасибо за отзыв!\n"
@@ -169,7 +223,7 @@ async def fifth_response(update, context):
         "/message У меня появился еще один вопрос")
 
     # Создаем новый тикет
-    response = post('http://127.0.0.1:8080/api/add_ticket',
+    response = post(f'{API_BASE_URL}/api/add_ticket',
                     json={'name': data[0],
                           'email': data[1],
                           'product_name': data[2],
@@ -190,125 +244,108 @@ async def fifth_response(update, context):
     return 6  # Возвращаем состояние чата вместо END
 
 
-async def handle_chat_message(update, context):
-    """Обработчик сообщений в режиме чата"""
-    message_text = update.message.text
-    chat_id = str(update.message.chat.id)
-    message_id = update.message.message_id
+async def handle_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка сообщений в чате"""
+    chat_id = str(update.message.chat_id)
 
-    print(f"Получено новое сообщение: {message_text} от chat_id: {chat_id}")
-
-    # Получаем тикет по chat_id
-    ticket_response = get(
-        f'http://127.0.0.1:8080/api/ticket_by_chat/{chat_id}').json()
-
-    print(f"Ответ API ticket_by_chat: {ticket_response}")
-
-    if not ticket_response.get('ticket'):
+    # Получаем текущий тикет
+    response = get(f'http://127.0.0.1:8080/api/ticket_by_chat/{chat_id}')
+    if response.status_code != 200:
         await update.message.reply_text(
-            "У вас нет активного тикета. Создайте новый тикет с помощью команды /send_request")
+            "Произошла ошибка. Пожалуйста, создайте новый тикет командой /send_request")
+        context.user_data.clear()  # Очищаем данные при ошибке
+        return ConversationHandler.END
+
+    ticket_data = response.json().get('ticket')
+
+    # Если тикет не найден
+    if not ticket_data:
+        await update.message.reply_text(
+            "Для отправки сообщения создайте новый тикет командой /send_request")
         context.user_data.clear()
         return ConversationHandler.END
 
-    ticket = ticket_response['ticket']
-    print(f"Найден тикет: {ticket}")
+    # Проверяем, есть ли активный тикет для этого chat_id
+    if ticket_data.get('is_finished'):
+        # Проверяем, есть ли новый активный тикет
+        all_tickets_response = get(
+            f'http://127.0.0.1:8080/api/all_tickets_by_chat/{chat_id}')
+        if all_tickets_response.status_code == 200:
+            tickets = all_tickets_response.json().get('tickets', [])
+            active_ticket = next(
+                (t for t in tickets if not t.get('is_finished')), None)
 
-    # Проверяем, не закрыт ли тикет
-    if ticket.get('is_finished'):
-        await update.message.reply_text(
-            "Этот тикет уже закрыт. Если у вас появились новые вопросы, создайте новый тикет командой /send_request")
-        context.user_data.clear()
-        return ConversationHandler.END
+            if active_ticket:
+                ticket_data = active_ticket
+            else:
+                await update.message.reply_text(
+                    "Этот тикет закрыт. Для отправки нового сообщения создайте новый тикет командой /send_request")
+                context.user_data.clear()
+                return ConversationHandler.END
 
-    # Создаем директорию для сообщений, если её нет
-    messages_dir = os.path.join(os.path.dirname(__file__), 'messages')
-    if not os.path.exists(messages_dir):
-        try:
-            os.makedirs(messages_dir)
-            print(f"Создана директория: {messages_dir}")
-        except Exception as e:
-            print(f"Ошибка при создании директории: {e}")
-            await update.message.reply_text("Произошла ошибка при сохранении сообщения")
-            return 6
-
-    filename = os.path.join(messages_dir, f'{ticket["id"]}data.json')
-    print(f"Путь к файлу сообщений: {filename}")
-
+    # Сохраняем сообщение
     message_data = {
-        "message_id": message_id,
-        "text": message_text,
+        "message_id": update.message.message_id,
+        "text": update.message.text,
         "sender_type": "client",
-        "sender_name": ticket["name"],
+        "sender_name": ticket_data['name'],
         "timestamp": int(time.time())
     }
 
-    try:
-        # Читаем существующие сообщения или создаем новый список
-        if os.path.exists(filename):
-            with open(filename, "r", encoding='utf-8') as json_file:
-                data = json.load(json_file)
-                print(f"Прочитаны существующие сообщения: {data}")
-        else:
-            data = {"messages": []}
-            print("Создан новый список сообщений")
+    # Сохраняем сообщение в JSON
+    filename = f'messages/{ticket_data["id"]}data.json'
 
-        # Добавляем новое сообщение, если его еще нет
-        if not any(msg.get("message_id") == message_id for msg in data["messages"]):
-            data["messages"].append(message_data)
-            print(f"Добавлено новое сообщение: {message_data}")
+    if not os.path.exists('messages'):
+        os.makedirs('messages')
 
-            # Сохраняем обновленные данные
-            with open(filename, "w", encoding='utf-8') as json_file:
-                json.dump(data, json_file, indent=2, ensure_ascii=False)
-                print(f"Файл успешно сохранен: {filename}")
+    if os.path.exists(filename):
+        with open(filename, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    else:
+        data = {"messages": []}
 
-    except Exception as e:
-        print(f"Ошибка при работе с файлом: {e}")
-        await update.message.reply_text("Произошла ошибка при сохранении сообщения")
-        return 6
+    data["messages"].append(message_data)
 
-    # Обновляем last_id в тикете
-    try:
-        response = post('http://127.0.0.1:8080/api/update_last_id',
-                        json={'ticket_id': ticket['id'], 'last_id': message_id})
-        print(f"Ответ API update_last_id: {response.json()}")
-    except Exception as e:
-        print(f"Ошибка при обновлении last_id: {e}")
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
-    await update.message.reply_text("Ваше сообщение отправлено в техподдержку")
     return 6
 
 
-async def stop(update, context):
-    """Обработчик команды /stop"""
-    global data, chat_id
-    current_chat_id = str(update.message.chat.id)
-    print(f"Получена команда /stop от chat_id: {current_chat_id}")
+async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Закрыть тикет"""
+    chat_id = str(update.message.chat_id)
 
     # Получаем тикет по chat_id
-    ticket_response = get(
-        f'http://127.0.0.1:8080/api/ticket_by_chat/{current_chat_id}').json()
-    print(f"Ответ API ticket_by_chat: {ticket_response}")
+    response = get(f'http://127.0.0.1:8080/api/ticket_by_chat/{chat_id}')
+    if response.status_code != 200:
+        await update.message.reply_text("Произошла ошибка при поиске тикета")
+        return ConversationHandler.END
 
-    if ticket_response.get('ticket'):
-        ticket = ticket_response['ticket']
-        # Удаляем тикет
-        try:
-            post(f'http://127.0.0.1:8080/api/delete_ticket/{ticket["id"]}')
-            print(f"Тикет {ticket['id']} успешно удален")
-            await update.message.reply_text(
-                "Тикет закрыт. Спасибо за обращение! Если у вас появятся новые вопросы, создайте новый тикет командой /send_request")
-        except Exception as e:
-            print(f"Ошибка при удалении тикета: {e}")
-            await update.message.reply_text("Произошла ошибка при закрытии тикета")
+    ticket_data = response.json().get('ticket')
+    if not ticket_data:
+        await update.message.reply_text("Активный тикет не найден")
+        return ConversationHandler.END
+
+    # Проверяем, не закрыт ли уже тикет
+    if ticket_data.get('is_finished'):
+        await update.message.reply_text("Этот тикет уже закрыт")
+        return ConversationHandler.END
+
+    # Закрываем тикет через API
+    response = post('http://127.0.0.1:8080/api/close_ticket',
+                    json={'ticket_id': ticket_data['id']})
+
+    if response.status_code == 200:
+        # Очищаем данные пользователя
+        context.user_data.clear()
+
+        await update.message.reply_text(
+            "Тикет закрыт. Если у вас появятся новые вопросы, "
+            "создайте новый тикет командой /send_request")
     else:
-        print("Активный тикет не найден")
-        await update.message.reply_text("Всего доброго!")
+        await update.message.reply_text("Произошла ошибка при закрытии тикета")
 
-    # Очищаем все данные
-    context.user_data.clear()
-    chat_id = ''
-    data = []
     return ConversationHandler.END
 
 
@@ -320,7 +357,7 @@ async def send_support_message(update, context):
 
     # Получаем тикет по chat_id
     ticket_response = get(
-        f'http://127.0.0.1:8080/api/ticket_by_chat/{chat_id}').json()
+        f'{API_BASE_URL}/api/ticket_by_chat/{chat_id}').json()
 
     if not ticket_response.get('ticket'):
         await update.message.reply_text(
@@ -384,7 +421,7 @@ async def send_support_message(update, context):
         return
 
     # Обновляем last_id в тикете
-    response = post('http://127.0.0.1:8080/api/update_last_id',
+    response = post(f'{API_BASE_URL}/api/update_last_id',
                     json={'ticket_id': ticket['id'], 'last_id': message_id})
     print(f"Ответ API update_last_id: {response.json()}")
 
@@ -400,6 +437,11 @@ def main() -> None:
     # Проверяем, не запущен ли уже бот
     check_running()
 
+    # Проверяем доступность сервера
+    if not check_server():
+        print("ОШИБКА: Сервер недоступен. Пожалуйста, запустите сначала answer.py")
+        sys.exit(1)
+
     # Регистрируем обработчики сигналов
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -408,36 +450,34 @@ def main() -> None:
         application = Application.builder().token(
             "6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc").build()
 
-        # Создаем обработчик команды stop отдельно
-        stop_handler = CommandHandler('stop', stop)
+        # Создаем фильтр для всех команд
+        command_filter = filters.COMMAND
 
         conv_handler = ConversationHandler(
             entry_points=[CommandHandler('send_request', start)],
             states={
-                1: [MessageHandler(filters.TEXT & ~filters.COMMAND, first_response)],
-                2: [MessageHandler(filters.TEXT & ~filters.COMMAND, second_response)],
-                3: [MessageHandler(filters.TEXT & ~filters.COMMAND, third_response)],
-                4: [MessageHandler(filters.TEXT & ~filters.COMMAND, fourth_response)],
-                5: [MessageHandler(filters.TEXT & ~filters.COMMAND, fifth_response)],
-                6: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_chat_message)],
+                1: [MessageHandler(filters.TEXT & ~command_filter, first_response)],
+                2: [MessageHandler(filters.TEXT & ~command_filter, second_response)],
+                3: [MessageHandler(filters.TEXT & ~command_filter, third_response)],
+                4: [MessageHandler(filters.TEXT & ~command_filter, fourth_response)],
+                5: [MessageHandler(filters.TEXT & ~command_filter, fifth_response)],
+                6: [MessageHandler(filters.TEXT & ~command_filter, handle_chat_message)],
             },
             fallbacks=[
-                stop_handler,  # Добавляем обработчик stop
+                CommandHandler('stop', stop),
                 CommandHandler('message', send_support_message),
                 CommandHandler('send_request', start)
-            ]
+            ],
+            allow_reentry=True
         )
 
-        # Регистрируем обработчики
+        # Регистрируем только ConversationHandler
         application.add_handler(conv_handler)
-        # Добавляем обработчик stop глобально
-        application.add_handler(stop_handler)
 
         # Запускаем бота
         application.run_polling(allowed_updates=Update.ALL_TYPES)
 
     finally:
-        # Очищаем PID файл при выходе
         cleanup()
 
 

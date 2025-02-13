@@ -1,10 +1,11 @@
-Flask==3.0.3
+Flask==3.0.2
 Flask_Login==0.6.3
 flask_wtf==1.2.1
-python-telegram-bot>=20.0
+python-telegram-bot==20.7
 Requests==2.31.0
-SQLAlchemy==2.0.28
-SQLAlchemy_serializer==1.4.12
+SQLAlchemy==2.0.25
+SQLAlchemy_serializer==1.4.1
 Werkzeug==3.0.2
 WTForms==3.1.2
 email_validator==2.1.1
+psutil==5.9.8
