@@ -101,7 +101,8 @@ def desk():
                                news=assigned_list,
                                support_users=support_users,
                                name=name,
-                               is_admin=admin)
+                               is_admin=admin,
+                               current_user=current_user)
     except Exception as e:
         print(f"Ошибка при загрузке страницы desk: {e}")
         return render_template('desk.html',
@@ -110,7 +111,8 @@ def desk():
                                news=[],
                                support_users=[],
                                name=name,
-                               is_admin=admin)
+                               is_admin=admin,
+                               current_user=current_user)
 
 
 @app.errorhandler(404)
@@ -700,6 +702,51 @@ def get_all_tickets_by_chat(chat_id):
         })
     except Exception as e:
         print(f"Ошибка при получении тикетов: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/take_ticket', methods=['POST'])
+def take_ticket():
+    """Админ берет тикет себе"""
+    global name, admin
+    if not admin:
+        return jsonify({'error': 'Недостаточно прав'}), 403
+
+    if not request.json or 'ticket_id' not in request.json:
+        return jsonify({'error': 'Missing ticket_id'}), 400
+
+    try:
+        db_sess = db_session.create_session()
+        ticket = db_sess.query(Ticket).get(request.json['ticket_id'])
+        current_user = db_sess.query(User).filter(
+            User.surname + ' ' + User.name == name).first()
+
+        if not ticket:
+            return jsonify({'error': 'Тикет не найден'}), 404
+
+        if ticket.is_finished:
+            return jsonify({'error': 'Тикет уже закрыт'}), 400
+
+        if ticket.assigned_to:
+            return jsonify({'error': 'Тикет уже назначен'}), 400
+
+        # Назначаем тикет админу
+        ticket.assigned_to = current_user.id
+        ticket.worker = f"{current_user.surname} {current_user.name}"
+        db_sess.commit()
+
+        # Отправляем уведомление в Telegram
+        chat_id = ticket.chat_id
+        token = "6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc"
+        message = f"Ваш тикет взят в работу специалистом {current_user.surname} {current_user.name}"
+
+        post(
+            f'http://api.telegram.org/bot{token}/sendmessage?chat_id={chat_id}&text={message}')
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        print(f"Ошибка при назначении тикета: {e}")
         return jsonify({'error': str(e)}), 500
 
 

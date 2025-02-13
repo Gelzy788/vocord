@@ -103,26 +103,28 @@ async def start(update, context):
     current_chat_id = str(update.message.chat.id)
 
     try:
-        # Проверяем, есть ли уже активный тикет
+        # Проверяем все тикеты пользователя
         response = get(
-            f'{API_BASE_URL}/api/ticket_by_chat/{current_chat_id}')
+            f'{API_BASE_URL}/api/all_tickets_by_chat/{current_chat_id}')
 
         if response.status_code != 200:
             print(f"Ошибка сервера: {response.status_code}")
-            # Добавляем вывод текста ответа
             print(f"Ответ сервера: {response.text}")
             await update.message.reply_text(
                 "Извините, сервер временно недоступен. Попробуйте позже.")
             return ConversationHandler.END
 
-        ticket_response = response.json()
+        tickets = response.json().get('tickets', [])
 
-        if ticket_response.get('ticket'):
-            ticket = ticket_response['ticket']
-            if not ticket.get('is_finished'):  # Если тикет активен
-                await update.message.reply_text(
-                    "У вас уже есть активный тикет. Пожалуйста, дождитесь ответа специалиста или закройте текущий тикет командой /stop")
-                return ConversationHandler.END
+        # Проверяем, есть ли активный тикет
+        active_ticket = next(
+            (ticket for ticket in tickets if not ticket.get('is_finished')), None)
+
+        if active_ticket:
+            await update.message.reply_text(
+                "У вас уже есть активный тикет. Пожалуйста, дождитесь ответа специалиста или закройте текущий тикет командой /stop")
+            # Возвращаем состояние чата вместо END
+            return 6
 
     except Exception as e:
         print(f"Ошибка при проверке тикета: {e}")

@@ -33,10 +33,16 @@
                         <form action="{{ url_for('assign_worker', ticket_id=ticket[0]) }}" method="post" class="d-flex">
                             <select name="worker_id" class="form-control me-2" required>
                                 <option value="">Выберите сотрудника</option>
+                                <!-- Добавляем текущего админа первым в список -->
+                                <option value="{{ current_user.id }}">
+                                    {{ current_user.surname }} {{ current_user.name }} (Я)
+                                </option>
                                 {% for worker in support_users %}
+                                {% if worker.id != current_user.id %}
                                 <option value="{{ worker.id }}">
                                     {{ worker.surname }} {{ worker.name }}
                                 </option>
+                                {% endif %}
                                 {% endfor %}
                             </select>
                             <button type="submit" class="btn btn-primary">Назначить</button>
@@ -89,4 +95,31 @@
 {% endfor %}
 {% endif %}
 {% endwith %}
+
+<script>
+    function takeTicket(ticketId) {
+        fetch('/api/take_ticket', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                ticket_id: ticketId
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Тикет успешно взят в работу');
+                    window.location.reload();
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Произошла ошибка при назначении тикета');
+            });
+    }
+</script>
 {% endblock %}
