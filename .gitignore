@@ -26,8 +26,6 @@ env/
 
 # Local development settings
 .env
-*.sqlite
-*.db
 
 # Logs
 *.log
