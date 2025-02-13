@@ -1,7 +1,7 @@
 from flask import Flask, render_template, redirect, abort, flash, jsonify, request
 from requests import get, post
 from data import db_session, vocord_tickets_api
-from forms.user import RegisterForm, LoginForm, SendForm
+from forms.user import RegisterForm, LoginForm
 from data.users import User
 # from forms.ticket import TicketForm
 from data.tickets import Ticket
@@ -120,62 +120,6 @@ def not_found_error(error):
     return render_template('404.html'), 404
 
 
-@app.route('/send_message/<int:ticket_number>', methods=['GET', 'POST'])
-def send_message(ticket_number):
-    form = SendForm()
-    if form.validate_on_submit():
-        with session_scope() as db_sess:
-            ticket = db_sess.query(Ticket).filter(
-                Ticket.id == ticket_number).first()
-            if not ticket:
-                abort(404)
-
-            # Проверяем, не закрыт ли тикет
-            if ticket.is_finished:
-                flash('Этот тикет уже закрыт')
-                return redirect(f'/ticket/{ticket_number}')
-
-            text = form.text.data
-            chat_id = ticket.chat_id
-            token = "6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc"
-
-            # Отправляем сообщение в Telegram
-            response = post(
-                f'http://api.telegram.org/bot{token}/sendmessage?chat_id={chat_id}&text={text}')
-
-            if response.status_code == 200:
-                message_id = response.json()['result']['message_id']
-
-                # Сохраняем сообщение в JSON
-                messages_dir = 'messages'
-                if not os.path.exists(messages_dir):
-                    os.makedirs(messages_dir)
-
-                filename = f'messages/{ticket_number}data.json'
-
-                message_data = {
-                    "message_id": message_id,
-                    "text": text,
-                    "sender_type": "support",
-                    "sender_name": name,  # Имя сотрудника поддержки
-                    "timestamp": int(time.time())
-                }
-
-                if not os.path.exists(filename):
-                    data = {"messages": [message_data]}
-                else:
-                    with open(filename, "r", encoding='utf-8') as json_file:
-                        data = json.load(json_file)
-                        data["messages"].append(message_data)
-
-                with open(filename, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, indent=2, ensure_ascii=False)
-
-                return redirect(f'/ticket/{ticket_number}')
-
-    return render_template('letter.html', title='Ответ на обращение', form=form, name=name)
-
-
 @app.route('/ticket/<int:ticket_number>')
 def beloved_ticket(ticket_number):
     global name, admin
@@ -192,11 +136,10 @@ def beloved_ticket(ticket_number):
         current_user = db_sess.query(User).filter(
             User.surname + ' ' + User.name == name).first()
 
-        # Получаем список всех сотрудников поддержки для выпадающего списка
-        support_staff = None
-        if admin:
-            support_staff = db_sess.query(
-                User).filter(User.admin == False).all()
+        # Проверяем права доступа к тикету
+        if not admin and ticket.assigned_to != current_user.id:
+            flash('У вас нет прав на просмотр этого тикета')
+            return redirect('/my_desk')
 
         # Загружаем сообщения из JSON файла
         filename = f'messages/{ticket_number}data.json'
@@ -245,15 +188,13 @@ def beloved_ticket(ticket_number):
                         json.dump({"messages": messages}, f,
                                   indent=2, ensure_ascii=False)
 
-        return render_template('ticket.html',
+        return render_template('new_ticket.html',
                                title=f'Тикет №{ticket_number}',
                                ticket=ticket,
-                               name=name,
                                messages=messages,
-                               is_finished=ticket.is_finished,
-                               support_staff=support_staff,  # Список сотрудников
-                               is_admin=admin,  # Флаг админа
-                               current_user=current_user)  # Текущий пользователь
+                               name=name,
+                               is_admin=admin,
+                               current_user=current_user)
 
 
 @app.route('/add_new_user', methods=['GET', 'POST'])
@@ -747,6 +688,76 @@ def take_ticket():
 
     except Exception as e:
         print(f"Ошибка при назначении тикета: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/send_message/<int:ticket_id>', methods=['POST'])
+def api_send_message(ticket_id):
+    """API endpoint для отправки сообщений"""
+    global name, admin
+    if name is None:
+        return jsonify({'error': 'Необходима авторизация'}), 401
+
+    if not request.json or 'text' not in request.json:
+        return jsonify({'error': 'Отсутствует текст сообщения'}), 400
+
+    try:
+        db_sess = db_session.create_session()
+        ticket = db_sess.query(Ticket).get(ticket_id)
+        current_user = db_sess.query(User).filter(
+            User.surname + ' ' + User.name == name).first()
+
+        if not ticket:
+            return jsonify({'error': 'Тикет не найден'}), 404
+
+        if ticket.is_finished:
+            return jsonify({'error': 'Тикет закрыт'}), 400
+
+        if not admin and ticket.assigned_to != current_user.id:
+            return jsonify({'error': 'Нет прав на ответ в этом тикете'}), 403
+
+        # Отправляем сообщение в Telegram
+        chat_id = ticket.chat_id
+        token = "6874396479:AAETyIiiUhpR-pJlW7cwcX0Sd59yDI8jqVc"
+        text = request.json['text']
+
+        response = post(
+            f'http://api.telegram.org/bot{token}/sendmessage?chat_id={chat_id}&text={text}')
+
+        if response.status_code == 200:
+            message_id = response.json()['result']['message_id']
+
+            # Сохраняем сообщение в JSON
+            filename = f'messages/{ticket_id}data.json'
+
+            if not os.path.exists('messages'):
+                os.makedirs('messages')
+
+            message_data = {
+                "message_id": message_id,
+                "text": text,
+                "sender_type": "support",
+                "sender_name": f"{current_user.surname} {current_user.name}",
+                "timestamp": int(time.time())
+            }
+
+            if os.path.exists(filename):
+                with open(filename, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            else:
+                data = {"messages": []}
+
+            data["messages"].append(message_data)
+
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+
+            return jsonify({'success': True})
+        else:
+            return jsonify({'error': 'Ошибка отправки сообщения в Telegram'}), 500
+
+    except Exception as e:
+        print(f"Ошибка при отправке сообщения: {e}")
         return jsonify({'error': str(e)}), 500
 
 

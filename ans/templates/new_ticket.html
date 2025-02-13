@@ -8,7 +8,16 @@
   <p><strong>Продукт:</strong> {{ ticket.product_name }}</p>
   <p><strong>Описание проблемы:</strong> {{ ticket.problem_full }}</p>
   <p><strong>Статус:</strong> {% if ticket.is_finished %}Закрыт{% else %}Активен{% endif %}</p>
-  <button onclick="window.location.reload()" class="btn btn-secondary">Обновить сообщения</button>
+  <div class="btn-group" role="group">
+    <button onclick="window.location.reload()" class="btn btn-secondary">Обновить сообщения</button>
+    {% if not ticket.is_finished and (is_admin or ticket.assigned_to == current_user.id) %}
+    <form action="{{ url_for('close_ticket', ticket_id=ticket.id) }}" method="post" style="display: inline;">
+      <button type="submit" class="btn btn-danger" onclick="return confirm('Вы уверены, что хотите закрыть тикет?')">
+        Закрыть тикет
+      </button>
+    </form>
+    {% endif %}
+  </div>
 </div>
 
 <div class="chat-container">
@@ -28,12 +37,45 @@
 {% if not ticket.is_finished %}
 <div class="reply-form">
   <h3>Ответить на обращение</h3>
-  <form action="{{ url_for('send_message', ticket_number=ticket.id) }}" method="post">
+  <form id="replyForm" class="mb-3">
     <div class="form-group">
-      <textarea name="text" class="form-control" rows="4" required></textarea>
+      <textarea name="text" id="messageText" class="form-control" rows="4" required></textarea>
     </div>
     <button type="submit" class="btn btn-primary">Отправить</button>
   </form>
 </div>
+
+<script>
+  document.getElementById('replyForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const messageText = document.getElementById('messageText').value;
+
+    fetch(`/api/send_message/{{ ticket.id }}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: messageText
+      })
+    })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Очищаем поле ввода
+          document.getElementById('messageText').value = '';
+          // Перезагружаем страницу для отображения нового сообщения
+          window.location.reload();
+        } else {
+          alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Произошла ошибка при отправке сообщения');
+      });
+  });
+</script>
 {% endif %}
 {% endblock %}

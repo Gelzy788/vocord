@@ -14,11 +14,6 @@ class RegisterForm(FlaskForm):
     submit = SubmitField('Добавить')
 
 
-class SendForm(FlaskForm):
-    text = TextAreaField('Сообщение', validators=[DataRequired()])
-    submit = SubmitField('Отправить')
-
-
 class LoginForm(FlaskForm):
     login = StringField('Логин', validators=[DataRequired()])
     password = PasswordField('Пароль', validators=[DataRequired()])
