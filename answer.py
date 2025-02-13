@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, abort, flash, jsonify, request
+from flask import Flask, render_template, redirect, abort, flash, jsonify, request, url_for
 from requests import get, post
 from data import db_session, vocord_tickets_api
 from forms.user import RegisterForm, LoginForm
@@ -439,12 +439,16 @@ def profile():
         if not current_user:
             return redirect('/login')
 
-        # Получаем статистику по тикетам
-        active_tickets = db_sess.query(Ticket).filter(
+        # Получаем активные тикеты и их список для отображения
+        active_tickets_query = db_sess.query(Ticket).filter(
             Ticket.assigned_to == current_user.id,
             Ticket.is_finished == False
-        ).count()
+        )
+        active_tickets = active_tickets_query.count()
+        active_tickets_list = active_tickets_query.order_by(
+            Ticket.created_at.desc()).all()
 
+        # Получаем только количество закрытых тикетов для кнопки
         closed_tickets = db_sess.query(Ticket).filter(
             Ticket.assigned_to == current_user.id,
             Ticket.is_finished == True
@@ -455,13 +459,49 @@ def profile():
                                name=name,
                                user=current_user,
                                active_tickets=active_tickets,
+                               active_tickets_list=active_tickets_list,
                                closed_tickets=closed_tickets,
+                               closed_tickets_url=url_for(
+                                   'view_closed_tickets'),
                                is_admin=admin)
 
     except Exception as e:
         print(f"Ошибка при загрузке профиля: {e}")
         flash('Произошла ошибка при загрузке профиля')
         return redirect('/my_desk')
+
+
+@app.route('/profile/closed_tickets')
+def view_closed_tickets():
+    """Страница просмотра закрытых тикетов текущего пользователя"""
+    global name, admin
+    if name is None:
+        return redirect('/login')
+
+    try:
+        db_sess = db_session.create_session()
+        current_user = db_sess.query(User).filter(
+            User.surname + ' ' + User.name == name).first()
+
+        if not current_user:
+            return redirect('/login')
+
+        # Получаем закрытые тикеты
+        closed_tickets = db_sess.query(Ticket).filter(
+            Ticket.assigned_to == current_user.id,
+            Ticket.is_finished == True
+        ).order_by(Ticket.created_at.desc()).all()
+
+        return render_template('closed_tickets.html',
+                               title='Закрытые тикеты',
+                               name=name,
+                               is_admin=admin,
+                               closed_tickets=closed_tickets)
+
+    except Exception as e:
+        print(f"Ошибка при загрузке закрытых тикетов: {e}")
+        flash('Произошла ошибка при загрузке закрытых тикетов')
+        return redirect('/profile')
 
 
 @app.route('/')
@@ -482,23 +522,17 @@ def index():
         if not current_user:
             return redirect('/login')
 
-        # Получаем статистику по тикетам
+        # Получаем только активные тикеты для нижней панели
         active_tickets = db_sess.query(Ticket).filter(
             Ticket.assigned_to == current_user.id,
             Ticket.is_finished == False
-        ).count()
-
-        closed_tickets = db_sess.query(Ticket).filter(
-            Ticket.assigned_to == current_user.id,
-            Ticket.is_finished == True
         ).count()
 
         return render_template('index.html',
                                title='Главная',
                                name=name,
                                is_admin=admin,
-                               active_tickets=active_tickets,
-                               closed_tickets=closed_tickets)
+                               active_tickets=active_tickets)
 
     except Exception as e:
         print(f"Ошибка при загрузке главной страницы: {e}")
@@ -553,18 +587,20 @@ def view_staff_member(user_id):
             flash('Сотрудник не найден')
             return redirect('/staff')
 
-        # Получаем статистику
-        active_tickets = db_sess.query(Ticket).filter(
+        # Получаем активные тикеты
+        active_tickets_query = db_sess.query(Ticket).filter(
             Ticket.assigned_to == user.id,
             Ticket.is_finished == False
-        ).count()
+        )
+        active_tickets = active_tickets_query.count()
+        active_tickets_list = active_tickets_query.order_by(
+            Ticket.created_at.desc()).all()
 
-        # Получаем все закрытые тикеты
+        # Получаем закрытые тикеты
         closed_tickets_query = db_sess.query(Ticket).filter(
             Ticket.assigned_to == user.id,
             Ticket.is_finished == True
         )
-
         closed_tickets = closed_tickets_query.count()
         closed_tickets_list = closed_tickets_query.order_by(
             Ticket.created_at.desc()).all()
@@ -575,6 +611,7 @@ def view_staff_member(user_id):
                                is_admin=admin,
                                user=user,
                                active_tickets=active_tickets,
+                               active_tickets_list=active_tickets_list,
                                closed_tickets=closed_tickets,
                                closed_tickets_list=closed_tickets_list)
     except Exception as e:
@@ -760,6 +797,72 @@ def api_send_message(ticket_id):
     except Exception as e:
         print(f"Ошибка при отправке сообщения: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/staff/<int:user_id>/active_tickets')
+def view_staff_active_tickets(user_id):
+    """Страница просмотра активных тикетов сотрудника"""
+    global name, admin
+    if not admin:
+        return redirect('/')
+
+    try:
+        db_sess = db_session.create_session()
+        user = db_sess.query(User).get(user_id)
+
+        if not user:
+            flash('Сотрудник не найден')
+            return redirect('/staff')
+
+        # Получаем все активные тикеты
+        active_tickets = db_sess.query(Ticket).filter(
+            Ticket.assigned_to == user.id,
+            Ticket.is_finished == False
+        ).order_by(Ticket.created_at.desc()).all()
+
+        return render_template('staff_active_tickets.html',
+                               title=f'Активные тикеты: {user.surname} {user.name}',
+                               name=name,
+                               is_admin=admin,
+                               user=user,
+                               active_tickets=active_tickets)
+    except Exception as e:
+        print(f"Ошибка при просмотре активных тикетов сотрудника: {e}")
+        flash('Произошла ошибка при загрузке активных тикетов')
+        return redirect('/staff')
+
+
+@app.route('/staff/<int:user_id>/closed_tickets')
+def view_staff_closed_tickets(user_id):
+    """Страница просмотра закрытых тикетов сотрудника"""
+    global name, admin
+    if not admin:
+        return redirect('/')
+
+    try:
+        db_sess = db_session.create_session()
+        user = db_sess.query(User).get(user_id)
+
+        if not user:
+            flash('Сотрудник не найден')
+            return redirect('/staff')
+
+        # Получаем закрытые тикеты
+        closed_tickets = db_sess.query(Ticket).filter(
+            Ticket.assigned_to == user.id,
+            Ticket.is_finished == True
+        ).order_by(Ticket.created_at.desc()).all()
+
+        return render_template('staff_closed_tickets.html',
+                               title=f'Закрытые тикеты: {user.surname} {user.name}',
+                               name=name,
+                               is_admin=admin,
+                               user=user,
+                               closed_tickets=closed_tickets)
+    except Exception as e:
+        print(f"Ошибка при просмотре закрытых тикетов сотрудника: {e}")
+        flash('Произошла ошибка при загрузке закрытых тикетов')
+        return redirect('/staff')
 
 
 if __name__ == '__main__':
