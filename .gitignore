@@ -41,7 +41,6 @@ coverage.xml
 *.cover
 
 # Project specific
-messages/
 messages/*
-messages/**/*
+!messages/.gitkeep
 *.pid 
