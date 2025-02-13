@@ -1,98 +1,32 @@
 {% extends "base.html" %}
 
 {% block content %}
-<style>
-    .custom-checkbox {
-      position: absolute;
-      z-index: -1;
-      opacity: 0;
-    }
-
-    /* для элемента label, связанного с .custom-checkbox */
-    .custom-checkbox+label {
-      display: inline-flex;
-      align-items: center;
-      user-select: none;
-    }
-
-    /* создание в label псевдоэлемента before со следующими стилями */
-    .custom-checkbox+label::before {
-      content: '';
-      display: inline-block;
-      width: 1em;
-      height: 1em;
-      flex-shrink: 0;
-      flex-grow: 0;
-      border: 1px solid #adb5bd;
-      border-radius: 0.25em;
-      margin-right: 0.5em;
-      background-repeat: no-repeat;
-      background-position: center center;
-      background-size: 50% 50%;
-    }
-
-    /* стили при наведении курсора на checkbox */
-    .custom-checkbox:not(:disabled):not(:checked)+label:hover::before {
-      border-color: #b3d7ff;
-    }
-
-    /* стили для активного чекбокса (при нажатии на него) */
-    .custom-checkbox:not(:disabled):active+label::before {
-      background-color: #b3d7ff;
-      border-color: #b3d7ff;
-    }
-
-    /* стили для чекбокса, находящегося в фокусе */
-    .custom-checkbox:focus+label::before {
-      box-shadow: 0 0 0 0.2rem rgba(180, 180, 180, 0.8);
-    }
-
-    /* стили для чекбокса, находящегося в фокусе и не находящегося в состоянии checked */
-    .custom-checkbox:focus:not(:checked)+label::before {
-      border-color: #80bdff;
-    }
-
-    /* стили для чекбокса, находящегося в состоянии checked */
-    .custom-checkbox:checked+label::before {
-      border-color: #0b76ef;
-      background-color: #559a20;
-      background-image: url("static/img/check_ico.png");
-      background-size: contain;
-    }
-
-    /* стили для чекбокса, находящегося в состоянии disabled */
-    .custom-checkbox:disabled+label::before {
-      background-color: #e9ecef;
-    }
-</style>
-    <center>
-        <div class="alert alert-primary" role="alert">
-        <h1>Авторизация</h1>
-        </div>
-    <img src="/static/img/user_ico_w_trans.png" />
-    <form action="" method="post">
-        {{ form.hidden_tag() }}
-        <p>
-            {{ form.login.label }}<br>
-            <div style=""> {{ form.login(class="form-control", type="login", style="color: #000000; background-color: #559a20; border-color: #7a7a7a; border-radius: 0.25rem; outline: 0; box-shadow: 0 0 0 0.3rem rgba(180, 180, 180, 0.8);") }}</div><br>
-            {% for error in form.login.errors %}
-                <div class="alert alert-danger" role="alert">
-                    {{ error }}
-                </div>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.password.label }}<br>
-            <div style=""> {{ form.password(class="form-control", type="password", style="color: #000000; background-color: #559a20; border-color: #7a7a7a; border-radius: 0.25rem; outline: 0; box-shadow: 0 0 0 0.3rem rgba(180, 180, 180, 0.8);") }}</div><br>
-            {% for error in form.password.errors %}
-                <div class="alert alert-danger" role="alert">
-                    {{ error }}
-                </div>
-            {% endfor %}
-        </p>
-        <p>{{ form.remember_me(class="custom-checkbox", type="checkbox") }} {{ form.remember_me.label }}</p>
-        <p>{{ form.submit(type="submit", class="btn btn-primary", style="color: #000000; background-color: #559a20; border-color: #7a7a7a; border-radius: 0.25rem; outline: 0; box-shadow: 0 0 0 0.3rem rgba(180, 180, 180, 0.8);") }}</p>
-        <div>{{ message }}</div>
-    </form>
-    </center>
+<div class="auth-container">
+  <h1 class="auth-title">Авторизация</h1>
+  {% if message %}
+  <div class="auth-message">{{ message }}</div>
+  {% endif %}
+  <form action="" method="post" class="auth-form">
+    {{ form.hidden_tag() }}
+    <div class="form-group">
+      {{ form.login.label }}
+      {{ form.login(class="form-control", type="text") }}
+      {% for error in form.login.errors %}
+      <div class="alert alert-danger">{{ error }}</div>
+      {% endfor %}
+    </div>
+    <div class="form-group">
+      {{ form.password.label }}
+      {{ form.password(class="form-control", type="password") }}
+      {% for error in form.password.errors %}
+      <div class="alert alert-danger">{{ error }}</div>
+      {% endfor %}
+    </div>
+    <div class="form-check">
+      {{ form.remember_me(class="form-check-input") }}
+      {{ form.remember_me.label(class="form-check-label") }}
+    </div>
+    {{ form.submit(type="submit", class="btn btn-primary") }}
+  </form>
+</div>
 {% endblock %}

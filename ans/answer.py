@@ -455,7 +455,8 @@ def profile():
                                name=name,
                                user=current_user,
                                active_tickets=active_tickets,
-                               closed_tickets=closed_tickets)
+                               closed_tickets=closed_tickets,
+                               is_admin=admin)
 
     except Exception as e:
         print(f"Ошибка при загрузке профиля: {e}")

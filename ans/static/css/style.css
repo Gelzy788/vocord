@@ -74,3 +74,66 @@ body {
     background-color: #f8f9fa;
     border-radius: 5px;
 }
+
+/* Стили для форм авторизации и регистрации */
+.auth-container {
+    max-width: 500px;
+    margin: 40px auto;
+    padding: 30px;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+}
+
+.auth-title {
+    color: #00a650;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.auth-form .form-group {
+    margin-bottom: 20px;
+}
+
+.auth-form label {
+    font-weight: 500;
+    color: #495057;
+}
+
+.auth-form .form-control {
+    border-radius: 5px;
+    padding: 10px 15px;
+    border: 1px solid #ced4da;
+}
+
+.auth-form .form-control:focus {
+    border-color: #00a650;
+    box-shadow: 0 0 0 0.2rem rgba(0, 166, 80, 0.25);
+}
+
+.auth-form .btn-primary {
+    background-color: #00a650;
+    border-color: #00a650;
+    padding: 10px 20px;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.auth-form .btn-primary:hover {
+    background-color: #008c44;
+    border-color: #008c44;
+}
+
+.auth-message {
+    color: #dc3545;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.auth-form .form-check {
+    margin: 15px 0;
+}
+
+.auth-form .form-check-label {
+    color: #6c757d;
+}
